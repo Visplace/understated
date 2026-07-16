@@ -13,7 +13,7 @@ export function BackgroundVideo() {
 
     let prevX: number | null = null
     let targetTime = 0
-    let isSeeking = false
+    let rafId: number
 
     const handleMouseMove = (event: MouseEvent) => {
       if (window.innerWidth < 1024) return
@@ -29,27 +29,32 @@ export function BackgroundVideo() {
 
       const deltaTime = (delta / window.innerWidth) * 0.8 * video.duration
       targetTime = Math.min(Math.max(targetTime + deltaTime, 0), video.duration)
-
-      if (!isSeeking) {
-        isSeeking = true
-        video.currentTime = targetTime
-      }
     }
 
-    const handleSeeked = () => {
-      isSeeking = false
-      if (Math.abs(video.currentTime - targetTime) > 0.01) {
-        isSeeking = true
+    // Apply the scrub target at most once per frame, and only once the
+    // previous seek has resolved (video.seeking) — this keeps rapid mouse
+    // deltas from queuing up seeks faster than the browser can service them,
+    // which is what makes remote-hosted video feel laggy while scrubbing.
+    const applyScrub = () => {
+      if (!video.seeking && Math.abs(video.currentTime - targetTime) > 0.01) {
         video.currentTime = targetTime
       }
+      rafId = requestAnimationFrame(applyScrub)
     }
+
+    // The rAF loop above checks video.seeking directly, but we still bind
+    // this so the browser's own frame-accurate seek completion (rather than
+    // a fixed delay) is what unblocks the next write to currentTime.
+    const handleSeeked = () => {}
 
     window.addEventListener('mousemove', handleMouseMove)
     video.addEventListener('seeked', handleSeeked)
+    rafId = requestAnimationFrame(applyScrub)
 
     return () => {
       window.removeEventListener('mousemove', handleMouseMove)
       video.removeEventListener('seeked', handleSeeked)
+      cancelAnimationFrame(rafId)
     }
   }, [])
 
