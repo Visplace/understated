@@ -3,21 +3,19 @@ import { useEffect, useRef } from 'react'
 const VIDEO_SRC =
   'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260601_110537_3a579fa0-7bbc-4d94-9d25-0e816c7840f5.mp4'
 
+/** How much of the clip a full-width mouse sweep covers. */
+const SCRUB_SENSITIVITY = 0.4
+/** Easing per frame (0–1) for the on-screen position catching up to the target. */
+const SCRUB_SMOOTHING = 0.18
 /**
- * Scrub feel — the two knobs to tune.
- *
- * SCRUB_SENSITIVITY: how much of the clip a full-width mouse sweep covers.
- *   0.8 = one edge-to-edge sweep scrubs ~80% of the video. Lower it (e.g. 0.4)
- *   to make the video move less per mouse travel (finer control, feels calmer);
- *   raise it toward 1+ to cover more of the clip in a single sweep.
- *
- * SCRUB_SMOOTHING: easing per frame, 0–1. It's how far the video catches up to
- *   the cursor each frame. Higher (e.g. 0.4) = snappier and more responsive but
- *   closer to raw/choppy; lower (e.g. 0.12) = silkier glide but more visible lag
- *   behind the cursor. 0.22 is a middle-ground default.
+ * Floor between real video.currentTime writes. Seeking a remote, sparsely
+ * keyframed video is expensive — issuing one every animation frame (~16ms)
+ * queues up decode work faster than the browser can retire it, which is what
+ * reads as delayed/choppy input. Pacing writes well below frame-rate gives
+ * each seek room to finish before the next is requested.
  */
-const SCRUB_SENSITIVITY = 5.0
-const SCRUB_SMOOTHING = 5.0
+const MIN_SEEK_INTERVAL_MS = 90
+
 export function BackgroundVideo() {
   const videoRef = useRef<HTMLVideoElement | null>(null)
 
@@ -29,6 +27,7 @@ export function BackgroundVideo() {
     let prevX: number | null = null
     let targetTime = 0
     let displayTime = 0
+    let lastSeekAt = 0
     let rafId: number
 
     const handleMouseMove = (event: MouseEvent) => {
@@ -60,12 +59,19 @@ export function BackgroundVideo() {
     }
 
     // Per-frame loop: ease the on-screen position toward the mouse target so
-    // motion decelerates smoothly rather than snapping, and only issue a new
-    // seek once the previous one has resolved (video.seeking) so rapid deltas
-    // never queue up faster than the browser can decode.
+    // motion decelerates smoothly rather than snapping. Actual seeks are
+    // paced by both video.seeking (never overlap a seek) and a minimum time
+    // gap (never outrun what the decoder can retire), which is what keeps
+    // rapid mouse movement from reading as delayed/choppy.
     const applyScrub = () => {
       displayTime += (targetTime - displayTime) * SCRUB_SMOOTHING
-      if (!video.seeking && Math.abs(video.currentTime - displayTime) > 0.008) {
+      const now = performance.now()
+      if (
+        !video.seeking &&
+        now - lastSeekAt > MIN_SEEK_INTERVAL_MS &&
+        Math.abs(video.currentTime - displayTime) > 0.008
+      ) {
+        lastSeekAt = now
         seekTo(displayTime)
       }
       rafId = requestAnimationFrame(applyScrub)
