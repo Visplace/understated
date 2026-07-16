@@ -3,6 +3,22 @@ import { useEffect, useRef } from 'react'
 const VIDEO_SRC =
   'https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260601_110537_3a579fa0-7bbc-4d94-9d25-0e816c7840f5.mp4'
 
+/**
+ * Scrub feel — the two knobs to tune.
+ *
+ * SCRUB_SENSITIVITY: how much of the clip a full-width mouse sweep covers.
+ *   0.8 = one edge-to-edge sweep scrubs ~80% of the video. Lower it (e.g. 0.4)
+ *   to make the video move less per mouse travel (finer control, feels calmer);
+ *   raise it toward 1+ to cover more of the clip in a single sweep.
+ *
+ * SCRUB_SMOOTHING: easing per frame, 0–1. It's how far the video catches up to
+ *   the cursor each frame. Higher (e.g. 0.4) = snappier and more responsive but
+ *   closer to raw/choppy; lower (e.g. 0.12) = silkier glide but more visible lag
+ *   behind the cursor. 0.22 is a middle-ground default.
+ */
+const SCRUB_SENSITIVITY = 0.8
+const SCRUB_SMOOTHING = 0.22
+
 export function BackgroundVideo() {
   const videoRef = useRef<HTMLVideoElement | null>(null)
 
@@ -28,7 +44,8 @@ export function BackgroundVideo() {
       const delta = event.clientX - prevX
       prevX = event.clientX
 
-      const deltaTime = (delta / window.innerWidth) * 0.8 * video.duration
+      const deltaTime =
+        (delta / window.innerWidth) * SCRUB_SENSITIVITY * video.duration
       targetTime = Math.min(Math.max(targetTime + deltaTime, 0), video.duration)
     }
 
@@ -47,9 +64,8 @@ export function BackgroundVideo() {
     // motion decelerates smoothly rather than snapping, and only issue a new
     // seek once the previous one has resolved (video.seeking) so rapid deltas
     // never queue up faster than the browser can decode.
-    const SMOOTHING = 0.22
     const applyScrub = () => {
-      displayTime += (targetTime - displayTime) * SMOOTHING
+      displayTime += (targetTime - displayTime) * SCRUB_SMOOTHING
       if (!video.seeking && Math.abs(video.currentTime - displayTime) > 0.008) {
         seekTo(displayTime)
       }
