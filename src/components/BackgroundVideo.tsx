@@ -16,9 +16,8 @@ const VIDEO_SRC =
  *   closer to raw/choppy; lower (e.g. 0.12) = silkier glide but more visible lag
  *   behind the cursor. 0.22 is a middle-ground default.
  */
-const SCRUB_SENSITIVITY = 0.1
-const SCRUB_SMOOTHING = 0.4
-
+const SCRUB_SENSITIVITY = 0.01
+const SCRUB_SMOOTHING = 0.6
 export function BackgroundVideo() {
   const videoRef = useRef<HTMLVideoElement | null>(null)
 
