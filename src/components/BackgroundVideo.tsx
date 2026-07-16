@@ -13,6 +13,7 @@ export function BackgroundVideo() {
 
     let prevX: number | null = null
     let targetTime = 0
+    let displayTime = 0
     let rafId: number
 
     const handleMouseMove = (event: MouseEvent) => {
@@ -31,29 +32,35 @@ export function BackgroundVideo() {
       targetTime = Math.min(Math.max(targetTime + deltaTime, 0), video.duration)
     }
 
-    // Apply the scrub target at most once per frame, and only once the
-    // previous seek has resolved (video.seeking) — this keeps rapid mouse
-    // deltas from queuing up seeks faster than the browser can service them,
-    // which is what makes remote-hosted video feel laggy while scrubbing.
+    // fastSeek jumps to the nearest keyframe instead of decoding to an exact
+    // frame, which is dramatically cheaper (Safari/Firefox). Chrome hasn't
+    // implemented it, so fall back to currentTime there.
+    const seekTo = (time: number) => {
+      if (typeof video.fastSeek === 'function') {
+        video.fastSeek(time)
+      } else {
+        video.currentTime = time
+      }
+    }
+
+    // Per-frame loop: ease the on-screen position toward the mouse target so
+    // motion decelerates smoothly rather than snapping, and only issue a new
+    // seek once the previous one has resolved (video.seeking) so rapid deltas
+    // never queue up faster than the browser can decode.
+    const SMOOTHING = 0.22
     const applyScrub = () => {
-      if (!video.seeking && Math.abs(video.currentTime - targetTime) > 0.01) {
-        video.currentTime = targetTime
+      displayTime += (targetTime - displayTime) * SMOOTHING
+      if (!video.seeking && Math.abs(video.currentTime - displayTime) > 0.008) {
+        seekTo(displayTime)
       }
       rafId = requestAnimationFrame(applyScrub)
     }
 
-    // The rAF loop above checks video.seeking directly, but we still bind
-    // this so the browser's own frame-accurate seek completion (rather than
-    // a fixed delay) is what unblocks the next write to currentTime.
-    const handleSeeked = () => {}
-
     window.addEventListener('mousemove', handleMouseMove)
-    video.addEventListener('seeked', handleSeeked)
     rafId = requestAnimationFrame(applyScrub)
 
     return () => {
       window.removeEventListener('mousemove', handleMouseMove)
-      video.removeEventListener('seeked', handleSeeked)
       cancelAnimationFrame(rafId)
     }
   }, [])
