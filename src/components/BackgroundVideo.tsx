@@ -17,7 +17,7 @@ const VIDEO_SRC =
  *   behind the cursor. 0.22 is a middle-ground default.
  */
 const SCRUB_SENSITIVITY = 0.01
-const SCRUB_SMOOTHING = 0.6
+const SCRUB_SMOOTHING = 1.0
 export function BackgroundVideo() {
   const videoRef = useRef<HTMLVideoElement | null>(null)
 
